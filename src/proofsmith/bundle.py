@@ -55,7 +55,14 @@ def create_bundle(
 def write_bundle(bundle: EvidenceBundle, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     target = output_dir / f"{bundle.bundle_id}.json"
-    target.write_text(json.dumps(redact(bundle.to_dict()), indent=2, ensure_ascii=False) + "\n")
+
+    # Redaction changes the canonical payload, so it must happen before hashing.
+    # Otherwise verify_chain would reject every persisted bundle containing a
+    # secret-shaped value even though the redacted file is intentionally safe.
+    payload = redact(bundle.to_dict())
+    unsigned = {key: value for key, value in payload.items() if key != "content_hash"}
+    payload["content_hash"] = bundle_hash(unsigned)
+    target.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
     return target
 
 

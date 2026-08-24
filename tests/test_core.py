@@ -71,3 +71,27 @@ def test_bundle_requires_evidence_for_pass() -> None:
     checks = (CheckResult("unit", "Unit tests", CheckStatus.PASS, "passed"),)
     bundle = create_bundle(request, checks)
     assert bundle.final_status is CheckStatus.REVIEW
+
+
+def test_redacted_bundle_remains_hash_verifiable(tmp_path: Path) -> None:
+    request = VerificationRequest(
+        revision="abc123",
+        changed_files=(ChangedFile("src/app.py", 2, 0),),
+        checks=("secret-scan",),
+    )
+    checks = (
+        CheckResult(
+            "secret-scan",
+            "Secret scan",
+            CheckStatus.PASS,
+            "clean",
+            evidence=("api_key=sk_live_example123456",),
+        ),
+    )
+
+    path = write_bundle(create_bundle(request, checks), tmp_path)
+    stored = json.loads(path.read_text())
+    valid, message = verify_chain([stored])
+
+    assert valid, message
+    assert "sk_live_example123456" not in path.read_text()
